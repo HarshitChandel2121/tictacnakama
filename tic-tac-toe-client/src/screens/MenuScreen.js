@@ -1,4 +1,5 @@
-import { styles } from "../styles";
+import { gridStyles } from "../styles/components";
+import {Grid} from "../components/Grid"
 
 export default function MenuScreen({
   username,
@@ -8,37 +9,43 @@ export default function MenuScreen({
   onCreate,
   onJoin
 }) {
-  return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>🎮 Tic Tac Toe</h1>
-
-        <div style={styles.section}>
-          <input
-            placeholder="Enter username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={styles.input}
-          />
-          <button onClick={onSave} style={styles.buttonSecondary}>
-            Save
-          </button>
-        </div>
-
-        <div style={styles.menuButtons}>
-          <button onClick={onQuickGame} style={styles.buttonPrimary}>
-            ⚡ Quick Game
-          </button>
-
-          <button onClick={onCreate} style={styles.button}>
-            🏠 Create Room
-          </button>
-
-          <button onClick={onJoin} style={styles.button}>
-            🔗 Join Room
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const cellList = [
+    {
+      onClick: onQuickGame,
+      content: "⚡ Quick Game"
+    },
+    {
+      onClick: onCreate,
+      content: "🏠 Create Room"
+    },
+    {
+      onClick: onJoin,
+      content: "🔗 Join Room"
+    },
+    {
+      onClick: onQuickGame,
+      content: "⚡ Quick Game"
+    },
+    {
+      onClick: onCreate,
+      content: "🏠 Create Room"
+    },
+    {
+      onClick: onJoin,
+      content: "🔗 Join Room"
+    },
+    {
+      onClick: onQuickGame,
+      content: "⚡ Quick Game"
+    },
+    {
+      onClick: onCreate,
+      content: "🏠 Create Room"
+    },
+    {
+      onClick: onJoin,
+      content: "🔗 Join Room"
+    }
+  ];
+  return (<Grid cellList={cellList} defaultStyle={gridStyles.cell}/>);
 }

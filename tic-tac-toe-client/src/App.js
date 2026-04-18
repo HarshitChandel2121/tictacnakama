@@ -6,6 +6,8 @@ import GameScreen from "./screens/GameScreen";
 import CreateRoomScreen from "./screens/CreateRoomScreen";
 import JoinRoomScreen from "./screens/JoinRoomScreen";
 
+import { layout, text, layoutHelpers} from "./styles/layout";
+
 const client = new Client("defaultkey", "localhost", "7350", false);
 
 function App() {
@@ -150,53 +152,58 @@ function App() {
   /* ---------------- RENDER ---------------- */
 
   return (
-    <div>
-      {screen === "menu" && (
-        <MenuScreen
-          username={username}
-          setUsername={setUsername}
-          onSave={saveUsername}
-          onQuickGame={quickGame}
-          onCreate={() => setScreen("create")}
-          onJoin={() => {
-            setScreen("join");
-            fetchRooms();
-          }}
-        />
-      )}
+    <div style={layout.container}>
+      <div style={layout.card}>
+        <h1 style={text.title}>🎮 Tic Tac Toe</h1>
+        <div style={layoutHelpers.section}>
+          {screen === "menu" && (
+            <MenuScreen
+              username={username}
+              setUsername={setUsername}
+              onSave={saveUsername}
+              onQuickGame={quickGame}
+              onCreate={() => setScreen("create")}
+              onJoin={() => {
+                setScreen("join");
+                fetchRooms();
+              }}
+            />
+          )}
 
-      {screen === "create" && (
-        <CreateRoomScreen
-          roomName={roomName}
-          setRoomName={setRoomName}
-          mode={mode}
-          setMode={setMode}
-          isPrivate={isPrivate}
-          setIsPrivate={setIsPrivate}
-          onCreate={createRoom}
-          goBack={() => setScreen("menu")}
-        />
-      )}
+          {screen === "create" && (
+            <CreateRoomScreen
+              roomName={roomName}
+              setRoomName={setRoomName}
+              mode={mode}
+              setMode={setMode}
+              isPrivate={isPrivate}
+              setIsPrivate={setIsPrivate}
+              onCreate={createRoom}
+              goBack={() => setScreen("menu")}
+            />
+          )}
 
-      {screen === "join" && (
-        <JoinRoomScreen
-          rooms={rooms}
-          onRefresh={fetchRooms}
-          onJoin={joinRoom}
-          goBack={() => setScreen("menu")}
-        />
-      )}
+          {screen === "join" && (
+            <JoinRoomScreen
+              rooms={rooms}
+              onRefresh={fetchRooms}
+              onJoin={joinRoom}
+              goBack={() => setScreen("menu")}
+            />
+          )}
 
-      {screen === "game" && (
-        <GameScreen
-          board={board}
-          turn={turn}
-          winner={winner}
-          playerId={playerId}
-          makeMove={makeMove}
-          goBack={reset}
-        />
-      )}
+          {screen === "game" && (
+            <GameScreen
+              board={board}
+              turn={turn}
+              winner={winner}
+              playerId={playerId}
+              makeMove={makeMove}
+              goBack={reset}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

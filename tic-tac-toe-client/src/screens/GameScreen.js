@@ -1,4 +1,6 @@
-import { styles } from "../styles";
+import { layout } from "../styles/layout";
+import { buttons, gridStyles } from "../styles/components";
+import { Grid } from "../components/Grid"
 
 export default function GameScreen({
   board,
@@ -16,34 +18,26 @@ export default function GameScreen({
     return turn === playerId ? "🟢 Your Turn" : "🟡 Opponent Turn";
   };
 
+  let cellList = board.map((cell, i) => {
+    let symbol = cell
+      ? (cell === playerId ? "X" : "O")
+      : "";
+
+    return (
+      {
+        "onClick":() => makeMove(i),
+        "content":symbol
+      }
+    );
+  });
+
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h2 style={styles.title}>Tic Tac Toe</h2>
-
-        <h3 style={styles.status}>{getStatus()}</h3>
-
-        <div style={styles.grid}>
-          {board.map((cell, i) => {
-            let symbol = "";
-            if (cell) symbol = cell === playerId ? "X" : "O";
-
-            return (
-              <button
-                key={i}
-                onClick={() => makeMove(i)}
-                style={styles.cell}
-              >
-                {symbol}
-              </button>
-            );
-          })}
-        </div>
-
-        <button onClick={goBack} style={styles.buttonSecondary}>
+      <div>
+        <h3 style={layout.status}>{getStatus()}</h3>
+        <Grid cellList={cellList} defaultStyle={{ ...gridStyles.cell, ...gridStyles.xoCell }}/>
+        <button onClick={goBack} style={buttons.secondary}>
           ⬅ Back
         </button>
       </div>
-    </div>
   );
 }
