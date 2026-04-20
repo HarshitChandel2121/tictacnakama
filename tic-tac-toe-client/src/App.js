@@ -11,8 +11,10 @@ import BackButton from "./components/BackButton";
 
 import { layout, text, layoutHelpers, nav} from "./styles/layout";
 
+const url = process.env.REACT_APP_NAKAMA_URL;
 
-const client = new Client("defaultkey", "localhost", "7350", false);
+// const client = new Client("defaultkey", "localhost", "7350", false);
+const client = new Client("defaultkey", url, "7350", false);
 
 function App() {
   const [screen, setScreen] = useState("menu");
@@ -51,6 +53,7 @@ function App() {
   const [remainingTime,setRemainingTime] = useState(null)
 
   const [leaderboard, setLeaderboard] = useState([]);
+  const [isReady, setIsReady] = useState(false);
 
   /* ---------------- INIT ---------------- */
   useEffect(() => {
@@ -132,6 +135,23 @@ function App() {
       };
 
       setSocket(socket);
+      setIsReady(true);
+      socket.ondisconnect = async (evt) => {
+        console.log("Socket disconnected:", evt);
+
+        // try reconnect
+        try {
+          await socket.connect(session, true);
+          console.log("Reconnected!");
+
+          // rejoin match if needed
+          if (matchId) {
+            await socket.joinMatch(matchId, undefined, { name: usernameRef.current });
+          }
+        } catch (err) {
+          console.log("Reconnect failed:", err);
+        }
+      };
 
       if (savedMatchId && savedMatchId !== "null") {
         try {
@@ -277,7 +297,9 @@ function App() {
   };
 
   /* ---------------- RENDER ---------------- */
-
+  if (!isReady) {
+    return <div style={layout.container}>Connecting to server...</div>;
+  }
   return (
     <div style={layout.container}>
       <div style={layout.wrapper}>

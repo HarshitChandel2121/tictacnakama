@@ -85,6 +85,12 @@ export default function MenuScreen({
       content: <>LEADER<br />BOARD</>
     }
   }
+  const getPlaceHolderCell = () => {
+    return {
+      onClick: undefined,
+      content: <>MORE<br />SOON</>
+    }
+  }
   
   const getDecorationCell = (decorationCell,setDecorationCell) => {
     return {
@@ -108,8 +114,8 @@ export default function MenuScreen({
     getDecorationCell(decorationCell2,setDecorationCell2),
     getJoinRoomCell(),
     getDecorationCell(decorationCell3,setDecorationCell3),
-    getCreateRoomCell(),
-    getLeaderBoardCell()
+    getLeaderBoardCell(),
+    getPlaceHolderCell()
   ];
   return (
     <div>
