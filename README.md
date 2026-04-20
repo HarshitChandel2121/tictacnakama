@@ -1,5 +1,12 @@
 # Multiplayer Tic Tac Toe (Fullstack)
 
+# 🌐 Live Demo
+
+- **Frontend:** https://tictacnakama.vercel.app/  
+- **Backend (Nakama Server):** https://tictacnakama.duckdns.org/
+
+---
+
 A realtime multiplayer Tic Tac Toe game built with:
 
 - **Backend:** Nakama + PostgreSQL + custom JavaScript match logic
@@ -7,12 +14,20 @@ A realtime multiplayer Tic Tac Toe game built with:
 
 ---
 
-## Tech Stack
+# 🧱 Tech Stack
 
-- [Nakama](https://heroiclabs.com/docs/nakama/)
+## Backend
+- Nakama (Server + Runtime Modules)
 - PostgreSQL
+- Docker
+
+## Frontend
 - React (Create React App)
-- `@heroiclabs/nakama-js`
+- @heroiclabs/nakama-js SDK
+
+## Deployment
+- AWS EC2 / VPS (Backend)
+- Vercel (Frontend)
 
 ---
 
@@ -176,7 +191,3 @@ npm test
 - Or change port mapping in `docker-compose.yaml`
 
 ---
-
-## License
-
-Add your preferred license (e.g., MIT).
