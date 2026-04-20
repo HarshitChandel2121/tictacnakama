@@ -77,7 +77,7 @@ function App() {
       setSession(session);
       setPlayerId(session.user_id);
 
-      const socket = client.createSocket(false, true);
+      const socket = client.createSocket(true, true);
       await socket.connect(session, true);
 
       const account = await client.getAccount(session);
