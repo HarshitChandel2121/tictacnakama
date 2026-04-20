@@ -14,7 +14,9 @@ import { layout, text, layoutHelpers, nav} from "./styles/layout";
 const url = process.env.REACT_APP_NAKAMA_URL;
 
 // const client = new Client("defaultkey", "localhost", "7350", false);
-const client = new Client("defaultkey", url, "7350", false);
+// const client = new Client("defaultkey", url, "7350", false);
+const client = new Client("defaultkey","tictacnakama.duckdns.org","443",true)
+
 
 function App() {
   const [screen, setScreen] = useState("menu");
