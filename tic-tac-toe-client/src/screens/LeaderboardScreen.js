@@ -47,7 +47,6 @@ export default function LeaderboardScreen({
         </button>
       </div>
 
-      {/* 📋 List */}
       <div style={{ marginTop: "15px" }}>
         {records.length === 0 && (
           <div style={{ opacity: 0.7 }}>No data yet</div>
@@ -57,6 +56,7 @@ export default function LeaderboardScreen({
           const isYou = p.owner_id === playerId;
           const meta = p.metadata || {};
           const displayRank = p.rank || i + 1;
+          const displayName = p.username || "Player";
 
           return (
             <div
@@ -74,7 +74,7 @@ export default function LeaderboardScreen({
               {/* LEFT */}
               <div>
                 <div style={{ fontWeight: "600" }}>
-                  #{displayRank} {isYou && "(You)"}
+                  #{displayRank} {displayName} {isYou && "(You)"}
                 </div>
 
                 <div style={{ fontSize: "12px", opacity: 0.8 }}>

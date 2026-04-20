@@ -163,7 +163,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
 
           if (otherPlayer) {
             state.winner = otherPlayer;
-            updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
+            updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner,state.playerNames)
             logger.info("🏆 Winner (timeout): " + otherPlayer);
           }
         }
@@ -188,7 +188,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
         state.remainingTime=0;
         dispatcher.broadcastMessage(2, JSON.stringify({remainingTime:state.remainingTime}));
         state.winner = winner;
-        updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
+        updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner,state.playerNames)
         logger.info("⏱ Time out. Winner: " + winner);
 
         dispatcher.broadcastMessage(1, JSON.stringify(state));
@@ -249,7 +249,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
           state.board[c] === state.currentPlayerSymbol
         ) {
           state.winner = msg.sender.userId;
-          updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
+          updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner,state.playerNames)
           state.winPattern = pattern
           logger.info("🏆 Winner: " + state.winner);
         }
@@ -257,7 +257,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
 
       if (!state.winner && state.board.every(cell => cell !== null)) {
         state.winner = "draw";
-        updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
+        updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner,state.playerNames)
         logger.info("Game draw");
       }
 
@@ -431,23 +431,21 @@ const calculateElo = (logger, ratingA, ratingB, scoreA, K = 32) => {
   }
 };
 
-const updateLeaderboard = (nk, logger, user1Id, user2Id, winner) => {
+const updateLeaderboard = (nk, logger, user1Id, user2Id, winner,playerNames) => {
   try {
-    logger.info("user1Id : "+user1Id+" user2Id : "+user2Id+" winner : "+winner)
+    const user1Name = playerNames[user1Id]
+    const user2Name = playerNames[user2Id]
+
     const user1Record = getPlayerRecord(nk,logger, user1Id);
     const user2Record = getPlayerRecord(nk,logger, user2Id);
-    logger.info("user1 record : "+JSON.stringify(user1Record))
-    logger.info("user2 record : "+JSON.stringify(user2Record))
 
     const user1Rating = user1Record.score;
     const user2Rating = user2Record.score;
-    logger.info("ratings before: " + user1Rating + " vs " + user2Rating);
 
     const user1ScoreA = (winner=="draw")?0.5:((winner==user1Id)?1:0);
     const user2ScoreA = (winner=="draw")?0.5:((winner==user2Id)?1:0);
     const user1NewRating = calculateElo(logger,user1Rating, user2Rating, user1ScoreA);
     const user2NewRating = calculateElo(logger,user2Rating, user1Rating, user2ScoreA);
-    logger.info("ratings after: " + user1NewRating + " vs " + user2NewRating);
 
     // update metadata
     const user1Meta = { ...(user1Record.metadata || {
@@ -494,7 +492,7 @@ const updateLeaderboard = (nk, logger, user1Id, user2Id, winner) => {
     nk.leaderboardRecordWrite(
       "global_leaderboard",
       user1Id,
-      null,
+      user1Name,
       user1NewRating,
       0,
       user1Meta
@@ -503,7 +501,7 @@ const updateLeaderboard = (nk, logger, user1Id, user2Id, winner) => {
     nk.leaderboardRecordWrite(
       "global_leaderboard",
       user2Id,
-      null,
+      user2Name,
       user2NewRating,
       0,
       user2Meta
