@@ -1,8 +1,8 @@
-import { styles } from "../styles";
+import { gridStyles } from "../styles/components"
 
-export function Grid({ cellList = [], defaultStyle=styles.cell }) {
+export function Grid({ cellList = [], defaultStyle=gridStyles.cell }) {
   return (
-    <div style={styles.grid}>
+    <div style={gridStyles.grid}>
       {cellList.map((cell, index) => {
         const key = cell?.key ?? index;
         const onClick = cell?.onClick ?? undefined;

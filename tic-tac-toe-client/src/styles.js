@@ -103,20 +103,21 @@ export const styles = {
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 100px)",
+    gridTemplateColumns: "repeat(3, 150px)",
     gap: "10px",
     justifyContent: "center",
-    marginTop: "20px"
+    margin: "20px 0px"
   },
 
   cell: {
-    height: "100px",
+    height: "150px",
     fontSize: "28px",
     borderRadius: "12px",
     border: "none",
     background: "#334155",
     color: "white",
-    cursor: "pointer"
+    cursor: "pointer",
+    fontWeight: "5px"
   },
 
   status: {

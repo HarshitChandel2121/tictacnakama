@@ -1,145 +1,305 @@
+const OPCODES = {
+  STATE_UPDATE: 1,
+  TIME_UPDATE: 2,
+  ERROR: 99
+};
+
 function matchInit(ctx, logger, nk, params) {
-  return {
-    state: {
-      board: Array(9).fill(null),
-      players: [],
-      turn: null,
-      winner: null,
+  try {
+    return {
+      state: {
+        board: Array(9).fill(null),
+        players: [],
+        disconnected: {},
+        playerNames: {},
+        match_started: false,
+        turn: null,
+        winner: null,
+        symbols: {},
+        currentPlayerSymbol: '',
+        winPattern: null,
 
-      // ✅ STORE METADATA
-      roomName: params.roomName,
-      isPrivate: params.isPrivate,
-      gameMode: params.gameMode,
-      creator: params.creator
-    },
+        // ✅ STORE METADATA
+        roomName: params.roomName,
+        isPrivate: params.isPrivate,
+        gameMode: params.gameMode,
+        creator: params.creator,
+        fromMatchMaker: params.fromMatchMaker,
+        created_at: 0,
+        match_cancelled: false,
+        gameMode: params.gameMode,
+        moveDeadline: null,
+        moveTimeLimit: params.gameMode === "timed" ? 30 : null,
+        remainingTime: null
+      },
 
-    // ✅ IMPORTANT (for listMatches)
-    label: JSON.stringify({
-      roomName: params.roomName,
-      isPrivate: params.isPrivate,
-      gameMode: params.gameMode,
-      creator: params.creator
-    }),
+      // ✅ IMPORTANT (for listMatches)
+      label: JSON.stringify({
+        roomName: params.roomName,
+        isPrivate: params.isPrivate,
+        gameMode: params.gameMode,
+        creator: params.creator
+      }),
 
-    tickRate: 1
-  };
+      tickRate: 1
+    };
+  } catch (error) {
+    logger.error("matchInit error:", error);
+
+    return {
+      state: {
+        board: Array(9).fill(null),
+        players: [],
+        disconnected: {},
+        playerNames: {},
+        match_started: false
+      },
+      tickRate: 1
+    };
+  }
 }
 
 function matchJoinAttempt(ctx, logger, nk, dispatcher, tick, state, presence, metadata) {
-  logger.info("➡️ matchJoinAttempt: " + presence.userId);
-  if (state.players.length >= 2) {
-    logger.info("❌ Rejecting join, match full");
-    return { state, accept: false };
+  try {
+    logger.info("➡️ matchJoinAttempt: " + presence.userId);
+    const isFull = state.players.length >= 2;
+    const isDuplicate = state.players.includes(presence.userId);
+    const isReconnect = presence.userId in state.disconnected;
+    
+    const name =
+      (metadata?.name && metadata.name.trim() !== "")
+        ? metadata.name.trim()
+        : ("Player_" + presence.userId.slice(0, 4));
+
+    state.playerNames[presence.userId] = name;
+    if ((isFull || isDuplicate) && !isReconnect) {
+      logger.info("Rejecting join");
+      return { state, accept: false };
+    }
+    return { state, accept: true };
+  } catch (error) {
+    logger.error("matchJoinAttempt error:", error);
+
+    return { state, accept: false };  // safest fallback
   }
-  return { state, accept: true };
 }
 
 function matchJoin(ctx, logger, nk, dispatcher, tick, state, presences) {
-  logger.info("✅ matchJoin called");
+  try {
+    logger.info("✅ matchJoin called");
 
-  presences.forEach(p => {
-    if (state.players.length >= 2) {
-      logger.info("⚠️ Match already full, ignoring: " + p.userId);
-      return;
+    presences.forEach(p => {
+      if (p.userId in state.disconnected) {
+        delete state.disconnected[p.userId]
+        return
+      }
+      if (state.players.length >= 2) {
+        logger.info("⚠️ Match already full, ignoring: " + p.userId);
+        return;
+      }
+
+      if (!state.players.includes(p.userId)) {
+        logger.info("👤 Player joined: " + p.userId);
+        state.players.push(p.userId);
+      }
+    });
+
+    if (state.players.length === 2) {
+      if (!state.match_started)
+      {
+        state.turn = state.players[0];
+        logger.info("🎮 Game starting. Turn: " + state.turn);
+        state.symbols = {
+          [state.players[0]]: "X",
+          [state.players[1]]: "O"
+        };
+        state.currentPlayerSymbol = state.symbols[state.turn];
+        for (let id in state.playerNames) {
+          if (!state.players.includes(id)) {
+            delete state.playerNames[id];
+          }
+        }
+        if (state.gameMode === "timed") {
+          state.moveDeadline = tick + state.moveTimeLimit;
+          state.remainingTime = 30
+        }
+        state.match_started=true;
+      }
+      logger.info("broad casting from match join")
+      dispatcher.broadcastMessage(1, JSON.stringify(state));
     }
 
-    if (!state.players.includes(p.userId)) {
-      logger.info("👤 Player joined: " + p.userId);
-      state.players.push(p.userId);
-    }
-  });
-
-  if (state.players.length === 2) {
-    state.turn = state.players[0];
-    logger.info("🎮 Game starting. Turn: " + state.turn);
-    dispatcher.broadcastMessage(1, JSON.stringify(state));
+    return { state };
+  } catch (error) {
+    logger.error("matchJoin error:", error);
+    return { state };   
   }
-
-  return { state };
 }
 
 function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
-  logger.info("Match Loop called")
-  if (messages.length > 0) {
-    logger.info("📩 Messages received: " + messages.length);
-  }
+  try {
+    const DISCONNECT_TIMEOUT = 10;
 
-  messages.forEach(msg => {
-    logger.info("📨 Raw message: " + msg.data);
-
-    let data;
-    try {
-      const decoded = nk.binaryToString(msg.data);  // ✅ FIX
-      logger.info("🧠 Decoded: " + decoded);
-
-      data = JSON.parse(decoded);
-    } catch (e) {
-      logger.error("❌ JSON parse failed");
-      return;
+    if (state.created_at==0) {
+      state.created_at=tick
     }
-
-    logger.info("👉 Move from: " + msg.sender.userId + " pos: " + data.pos);
-
-    if (state.winner) {
-      logger.info("🏁 Game already finished");
-      return;
+    if (!state.match_started && state.fromMatchMaker && tick-state.created_at>DISCONNECT_TIMEOUT) {
+      state.match_cancelled = true
+      dispatcher.broadcastMessage(1, JSON.stringify(state));
+      return null
+    } 
+    if (state.players.length==0 && tick-state.created_at>DISCONNECT_TIMEOUT*2) {
+      logger.info("INACTIVE ROOM :: MATCH CANCELLED")
+      state.match_cancelled = true
+      return null
     }
+    for (let playerId in state.disconnected) {
+      if (tick - state.disconnected[playerId] > DISCONNECT_TIMEOUT) {
+        logger.info("Player timed out: " + playerId);
 
-    if (msg.sender.userId !== state.turn) {
-      logger.info("⛔ Not your turn");
-      return;
-    }
+        // declare winner ONLY if game ongoing
+        if (!state.winner) {
+          const otherPlayer = state.players.find(p => p !== playerId);
 
-    if (state.board[data.pos] !== null) {
-      logger.info("⛔ Cell already filled");
-      return;
-    }
+          if (otherPlayer) {
+            state.winner = otherPlayer;
+            logger.info("🏆 Winner (timeout): " + otherPlayer);
+          }
+        }
 
-    state.board[data.pos] = msg.sender.userId;
-    logger.info("✅ Move accepted");
+        // cleanup (optional)
+        delete state.disconnected[playerId];
 
-    const winPatterns = [
-      [0,1,2],[3,4,5],[6,7,8],
-      [0,3,6],[1,4,7],[2,5,8],
-      [0,4,8],[2,4,6]
-    ];
-
-    for (let pattern of winPatterns) {
-      const [a,b,c] = pattern;
-      if (
-        state.board[a] &&
-        state.board[a] === state.board[b] &&
-        state.board[a] === state.board[c]
-      ) {
-        state.winner = state.board[a];
-        logger.info("🏆 Winner: " + state.winner);
+        dispatcher.broadcastMessage(1, JSON.stringify(state));
+        return null
       }
     }
 
-    state.turn = state.players.find(p => p !== state.turn);
-    logger.info("🔄 Next turn: " + state.turn);
+    if (
+      state.gameMode === "timed" &&
+      state.moveDeadline &&
+      !state.winner &&
+      !state.match_cancelled
+    ) {
+      if (tick >= state.moveDeadline) {
+        const loser = state.turn;
+        const winner = state.players.find(p => p !== loser);
+        state.remainingTime=0;
+        dispatcher.broadcastMessage(2, JSON.stringify({remainingTime:state.remainingTime}));
+        state.winner = winner;
+        logger.info("⏱ Time out. Winner: " + winner);
 
-    dispatcher.broadcastMessage(1, JSON.stringify(state));
-    logger.info("📡 State broadcasted");
-  });
+        dispatcher.broadcastMessage(1, JSON.stringify(state));
+        return null;
+      }
+    }
 
-  if (state.winner) {
-    logger.info("Ending match");
-    return null;
+    logger.info("Match Loop called")
+    if (messages.length > 0) {
+      logger.info("📩 Messages received: " + messages.length);
+    }
+
+    messages.forEach(msg => {
+      logger.info("📨 Raw message: " + msg.data);
+
+      let data;
+      try {
+        const decoded = nk.binaryToString(msg.data);  // ✅ FIX
+        logger.info("🧠 Decoded: " + decoded);
+
+        data = JSON.parse(decoded);
+      } catch (e) {
+        logger.error("❌ JSON parse failed");
+        return;
+      }
+
+      logger.info("👉 Move from: " + msg.sender.userId + " pos: " + data.pos);
+
+      if (state.winner || state.match_cancelled) {
+        logger.info("🏁 Game already finished");
+        return;
+      }
+
+      if (msg.sender.userId !== state.turn) {
+        logger.info("⛔ Not your turn");
+        return;
+      }
+
+      if (state.board[data.pos] !== null) {
+        logger.info("⛔ Cell already filled");
+        return;
+      }
+
+      state.board[data.pos] = state.symbols[msg.sender.userId];
+      logger.info("✅ Move accepted");
+
+      const winPatterns = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+
+      for (let pattern of winPatterns) {
+        const [a,b,c] = pattern;
+        if (
+          state.board[a] === state.currentPlayerSymbol &&
+          state.board[b] === state.currentPlayerSymbol &&
+          state.board[c] === state.currentPlayerSymbol
+        ) {
+          state.winner = msg.sender.userId;
+          state.winPattern = pattern
+          logger.info("🏆 Winner: " + state.winner);
+        }
+      }
+
+      if (!state.winner && state.board.every(cell => cell !== null)) {
+        state.winner = "draw";
+        logger.info("Game draw");
+      }
+
+      if (!state.winner) {
+        state.turn = state.players.find(p => p !== state.turn);
+        state.currentPlayerSymbol = state.symbols[state.turn];
+        logger.info("Next turn: " + state.turn);
+        if (state.gameMode === "timed") {
+          state.moveDeadline = tick + state.moveTimeLimit;
+        }
+      }
+
+      dispatcher.broadcastMessage(1, JSON.stringify(state));
+      logger.info("State broadcasted");
+    });
+
+    if (state.winner) {
+      logger.info("Ending match");
+      return null;
+    }
+    state.remainingTime =
+      state.gameMode === "timed" && state.moveDeadline
+        ? Math.max(0, state.moveDeadline - tick)
+        : null;
+    dispatcher.broadcastMessage(2, JSON.stringify({remainingTime:state.remainingTime}));
+    logger.info("State broadcasted");
+    return { state };
+  } catch (error) {
+    logger.error("error in matchLoop : ", error);
+    return { state };
   }
-  return { state };
 }
 
 function matchLeave(ctx, logger, nk, dispatcher, tick, state, presences) {
-  logger.info("🚪 Player left");
+  try {
+    logger.info("🚪 Player left (temporary?)");
 
-  if (!state.winner && state.players.length === 2) {
-    const leftPlayer = presences[0].userId;
-    state.winner = state.players.find(p => p !== leftPlayer);
-    logger.info("🏆 Winner by leave: " + state.winner);
+    presences.forEach(p => {
+      state.disconnected[p.userId] = tick; // store when they left
+    });
+
+    return { state };
+  } catch (error) {
+    logger.error("error in matchLeave : ", error);
+    return { state };
   }
-
-  return { state };
 }
 
 function matchTerminate(ctx, logger, nk, dispatcher, tick, state, graceSeconds) {
@@ -152,29 +312,43 @@ function matchSignal(ctx, logger, nk, dispatcher, tick, state, data) {
 }
 
 const onMatchmakerMatched = function (ctx,logger,nk,matches) {
-  const matchId = nk.matchCreate("tic-tac-toe")
-  return matchId;
+  try {
+    logger.info("MATCHE MADE MATCHES : ",JSON.stringify(matches))
+    const gameMode = matches[0].properties?.gameMode || "relaxed";
+    const matchId = nk.matchCreate("tic-tac-toe", {
+      gameMode: gameMode,
+      fromMatchMaker: true,
+    });
+    return matchId;
+  } catch (error) {
+    logger.error("error in onMatchmakerMatched : ", error);
+    return null;
+  }
 };
 
 const createMatchRPC = function (ctx, logger, nk, payload) {
-  let data = {};
-
   try {
-    if (payload) data = JSON.parse(payload);
-  } catch (e) {
-    return JSON.stringify({ error: "Invalid payload" });
+    let data = {};
+
+    try {
+      if (payload) data = JSON.parse(payload);
+    } catch (e) {
+      return JSON.stringify({ error: "Invalid payload" });
+    }
+
+    const matchId = nk.matchCreate("tic-tac-toe", {
+      roomName: data.roomName || "Room",
+      isPrivate: data.isPrivate || false,
+      gameMode: data.gameMode || "relaxed",
+      fromMatchMaker: false,
+      creator: data.creator || ctx.username || ctx.userId
+    });
+
+    return JSON.stringify({ matchId });
+  } catch (error) {
+    logger.error("error in createMatchRPC : ", error);
+    return JSON.stringify({ error: "MATCH_CREATE_FAILED" });
   }
-
-  const matchId = nk.matchCreate("tic-tac-toe", {
-    roomName: data.roomName || "Room",
-    isPrivate: data.isPrivate || false,
-    gameMode: data.gameMode || "relaxed",
-
-    // ✅ ADD THIS
-    creator: ctx.username || ctx.userId
-  });
-
-  return JSON.stringify({ matchId });
 };
 
 let listMatchesRPC = function (ctx, logger, nk, payload) {
@@ -199,7 +373,7 @@ let listMatchesRPC = function (ctx, logger, nk, payload) {
 
     return JSON.stringify(matches);
   } catch (error) {
-    logger.error("matchList error: %v", error);
+    logger.error("matchList error:", error);
     return JSON.stringify({ error: "Failed to fetch matches" });
   }
 };

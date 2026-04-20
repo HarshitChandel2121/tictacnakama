@@ -5,8 +5,11 @@ import MenuScreen from "./screens/MenuScreen";
 import GameScreen from "./screens/GameScreen";
 import CreateRoomScreen from "./screens/CreateRoomScreen";
 import JoinRoomScreen from "./screens/JoinRoomScreen";
+import Profile from "./components/profile";
+import BackButton from "./components/BackButton";
 
-import { layout, text, layoutHelpers} from "./styles/layout";
+import { layout, text, layoutHelpers, nav} from "./styles/layout";
+
 
 const client = new Client("defaultkey", "localhost", "7350", false);
 
@@ -22,8 +25,10 @@ function App() {
   const [playerId, setPlayerId] = useState(null);
   const [turn, setTurn] = useState(null);
   const [winner, setWinner] = useState(null);
+  const [winPattern,setWinPattern] = useState([])
 
   const [username, setUsername] = useState("");
+  const usernameRef = useRef("")
 
   const [roomName, setRoomName] = useState("");
   const [mode, setMode] = useState("relaxed");
@@ -33,13 +38,32 @@ function App() {
 
   const hasStarted = useRef(false);
 
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchTime, setSearchTime] = useState(0);
+  const matchmakerTicket = useRef(null);
+  const intervalRef = useRef(null);
+
+  const [match_cancelled,setMatchCancelled] = useState(false)
+  const [playerNames, setPlayerNames] = useState({});
+  const [symbols,setSymbols] = useState({})
+
+  const [remainingTime,setRemainingTime] = useState(null)
+
   /* ---------------- INIT ---------------- */
+  useEffect(() => {
+
+  },[])
   useEffect(() => {
     const start = async () => {
       if (hasStarted.current) return;
       hasStarted.current = true;
 
-      const deviceId = Math.random().toString();
+      let deviceId = sessionStorage.getItem("deviceId");
+
+      if (!deviceId) {
+        deviceId = crypto.randomUUID();
+        sessionStorage.setItem("deviceId", deviceId);
+      }
       const session = await client.authenticateDevice(deviceId);
 
       setSession(session);
@@ -48,22 +72,78 @@ function App() {
       const socket = client.createSocket(false, true);
       await socket.connect(session, true);
 
+      const account = await client.getAccount(session);
+      let name = account.user.display_name;
+
+      if (!name || name.trim() === "") {
+        name = "Player_" + Math.floor(Math.random() * 1000);
+
+        await client.updateAccount(session, {
+          display_name: name
+        });
+      }
+
+      setUsername(name);
+      usernameRef.current = name;
+      console.log("user name set : ",username,":",name)
+
+      const savedMatchId = sessionStorage.getItem("matchId");
+
       socket.onmatchmakermatched = async (matched) => {
-        const match = await socket.joinMatch(matched.match_id);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        
+        setIsSearching(false);
+        setSearchTime(0);
+
+        const match = await socket.joinMatch(matched.match_id,undefined,{name: usernameRef.current});
         setMatchId(match.match_id);
+        sessionStorage.setItem("matchId", match.match_id);
         setScreen("game");
       };
 
       socket.onmatchdata = (msg) => {
         const decoded = new TextDecoder().decode(msg.data);
         const state = JSON.parse(decoded);
-
-        setBoard(state.board);
-        setTurn(state.turn);
-        setWinner(state.winner);
+        switch (msg.op_code) {
+          case 1:
+            console.log("on match data state : ",state)
+            console.log("state : ",state)
+            setMatchCancelled(state.match_cancelled)
+            setPlayerNames(state.playerNames);
+            setSymbols(state.symbols);
+            setBoard(state.board);
+            setTurn(state.turn);
+            setWinner(state.winner);
+            setWinPattern(state.winPattern);
+            setMode(state.gameMode)
+            break;
+          case 2:
+            setRemainingTime(state.remainingTime);
+            break;
+          default:
+            console.log("User",msg.presence.user_id,"sent", msg.presence.user_id, state);
+        }
       };
 
       setSocket(socket);
+
+      if (savedMatchId && savedMatchId !== "null") {
+        try {
+          const match = await socket.joinMatch(savedMatchId,undefined,{name: usernameRef.current});
+          console.log("saved match : ", match)
+          setMatchId(match.match_id);
+          sessionStorage.setItem("matchId", match.match_id);
+          setScreen("game");
+          console.log("Rejoined match:", savedMatchId);
+        } catch (err) {
+          console.log("Failed to rejoin match");
+          sessionStorage.removeItem("matchId");
+        }
+      }
+
     };
 
     start();
@@ -71,24 +151,54 @@ function App() {
 
   /* ---------------- ACTIONS ---------------- */
 
-  const saveUsername = async () => {
-    if (!session || !username) return;
-    await client.updateAccount(session, { username });
-    alert("Username saved");
+  const saveUsername = async (name) => {
+    if (!session || !name) return;
+    try {
+      await client.updateAccount(session, { display_name: name });
+      usernameRef.current = name;
+      setUsername(name)
+    } catch (err) {
+      console.error("error in saveUsername : ", err);
+    }
   };
 
-  const quickGame = async () => {
-    await socket.addMatchmaker("*", 2, 2);
+  const quickGame = async (gameMode) => {
+    setIsSearching(true);
+    setSearchTime(0);
+    setMode(gameMode)
+
+    let query = "+properties.gameMode:"+gameMode;
+    let stringProperties = { "gameMode": gameMode};
+    const ticket = await socket.addMatchmaker(query, 2, 2,stringProperties);
+    matchmakerTicket.current = ticket;
+
+    intervalRef.current = setInterval(() => {
+      setSearchTime(prev => prev + 1);
+    }, 1000);
+  };
+
+  const cancelMatchmaking = async () => {
+    if (matchmakerTicket.current) {
+      await socket.removeMatchmaker(matchmakerTicket.current.ticket);
+      matchmakerTicket.current = null;
+    }
+
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    setIsSearching(false);
+    setSearchTime(0);
   };
 
   const createRoom = async () => {
-    const payload = { "roomName": roomName, "isPrivate":isPrivate, "gameMode":mode };
+    const payload = { "roomName": roomName, "isPrivate":isPrivate, "gameMode":mode, "creator":username };
     const rpcid = "createMatchRPC";
-    console.log("creating a match..")
     var match = await client.rpc(session, rpcid, payload);
-    console.log("created :: ", match)
-    match = await socket.joinMatch(match.payload.matchId);
+    match = await socket.joinMatch(match.payload.matchId,undefined,{name: usernameRef.current});
     setMatchId(match.match_id);
+    sessionStorage.setItem("matchId", match.match_id);
     setScreen("game");
   };
 
@@ -126,9 +236,10 @@ function App() {
   };
 
   const joinRoom = async (id) => {
-    const match = await socket.joinMatch(id);
+    const match = await socket.joinMatch(id,undefined,{name: usernameRef.current});
     console.log("joined match ",match)
     setMatchId(match.match_id);
+    sessionStorage.setItem("matchId", match.match_id);
     setScreen("game");
   };
 
@@ -141,67 +252,94 @@ function App() {
     socket.sendMatchState(matchId, 1, JSON.stringify({ pos }));
   };
 
-  const reset = () => {
+  const reset = async () => {
+    if (socket && matchId) {
+      await socket.leaveMatch(matchId);
+    }
+
     setScreen("menu");
     setBoard(Array(9).fill(null));
     setTurn(null);
     setWinner(null);
+    setWinPattern([]);
+    setPlayerNames({})
+    setSymbols({})
     setMatchId(null);
+    sessionStorage.removeItem("matchId");
   };
 
   /* ---------------- RENDER ---------------- */
 
   return (
     <div style={layout.container}>
-      <div style={layout.card}>
-        <h1 style={text.title}>🎮 Tic Tac Toe</h1>
-        <div style={layoutHelpers.section}>
-          {screen === "menu" && (
-            <MenuScreen
-              username={username}
-              setUsername={setUsername}
-              onSave={saveUsername}
-              onQuickGame={quickGame}
-              onCreate={() => setScreen("create")}
-              onJoin={() => {
-                setScreen("join");
-                fetchRooms();
-              }}
-            />
-          )}
+      <div style={layout.wrapper}>
+        <div style={layout.header}>
+          <BackButton
+            onClick={reset}
+            disabled={screen === "menu"}
+          />
 
-          {screen === "create" && (
-            <CreateRoomScreen
-              roomName={roomName}
-              setRoomName={setRoomName}
-              mode={mode}
-              setMode={setMode}
-              isPrivate={isPrivate}
-              setIsPrivate={setIsPrivate}
-              onCreate={createRoom}
-              goBack={() => setScreen("menu")}
-            />
-          )}
+          <Profile
+            username={username}
+            onSave={saveUsername}
+            editable={screen === "menu"}
+          />
+        </div>
+        <div style={layout.card}>
+          <h1 style={text.title}>🎮 Tic Tac Toe</h1>
+          <div style={layoutHelpers.section}>
+            {screen === "menu" && (
+              <MenuScreen
+                username={username}
+                onQuickGame={quickGame}
+                onCreate={() => setScreen("create")}
+                onJoin={() => {
+                  setScreen("join");
+                  fetchRooms();
+                }}
+                isSearching = {isSearching}
+                searchTime = {searchTime}
+                onCancel = {cancelMatchmaking}
+                searchingMode = {mode}
+              />
+            )}
 
-          {screen === "join" && (
-            <JoinRoomScreen
-              rooms={rooms}
-              onRefresh={fetchRooms}
-              onJoin={joinRoom}
-              goBack={() => setScreen("menu")}
-            />
-          )}
+            {screen === "create" && (
+              <CreateRoomScreen
+                roomName={roomName}
+                setRoomName={setRoomName}
+                mode={mode}
+                setMode={setMode}
+                isPrivate={isPrivate}
+                setIsPrivate={setIsPrivate}
+                onCreate={createRoom}
+              />
+            )}
 
-          {screen === "game" && (
-            <GameScreen
-              board={board}
-              turn={turn}
-              winner={winner}
-              playerId={playerId}
-              makeMove={makeMove}
-              goBack={reset}
-            />
-          )}
+            {screen === "join" && (
+              <JoinRoomScreen
+                rooms={rooms}
+                onRefresh={fetchRooms}
+                onJoin={joinRoom}
+              />
+            )}
+
+            {screen === "game" && (
+              <GameScreen
+                board={board}
+                turn={turn}
+                winner={winner}
+                playerId={playerId}
+                makeMove={makeMove}
+                match_cancelled={match_cancelled}
+                winPattern={winPattern}
+                playerNames={playerNames}
+                symbols={symbols}
+                mode={mode}
+                remainingTime={remainingTime}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

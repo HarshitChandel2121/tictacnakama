@@ -8,19 +8,35 @@ export const layout = {
     color: "white"
   },
 
+  wrapper: {
+    padding: "10px"
+  },
+
+  header: {
+    width: "100%",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "10px",
+    gap: "10px"
+  },
+
   card: {
+    width: "100%",
     background: "#1e293b",
-    padding: "30px",
+    padding: "25px 25px",
     borderRadius: "16px",
     boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
     textAlign: "center",
-    width: "350px"
+    boxSizing: "border-box",
+    gap: "20px"
   }
 };
 
 export const text = {
   title: {
-    marginBottom: "20px",
+    marginTop: "10px",
+    marginBottom: "40px",
     fontSize: "24px",
     fontWeight: "600"
   },
@@ -33,14 +49,14 @@ export const text = {
 
 export const layoutHelpers = {
   section: {
-    marginBottom: "20px"
+    marginBottom: "10px"
   },
 
   menuButtons: {
     display: "flex",
     flexDirection: "column",
     gap: "10px",
-    marginTop: "20px"
+    marginTop: "10px"
   },
 
   buttonRow: {
@@ -52,5 +68,22 @@ export const layoutHelpers = {
   divider: {
     margin: "20px 0",
     borderColor: "#334155"
+  }
+};
+
+export const nav = {
+  backButton: {
+    background: "#1e293b",
+    border: "none",
+    color: "white",
+    fontSize: "18px",
+    borderRadius: "16px",
+    padding: "6px 10px",
+    cursor: "pointer"
+  },
+
+  disabled: {
+    opacity: 0.3,
+    cursor: "not-allowed"
   }
 };

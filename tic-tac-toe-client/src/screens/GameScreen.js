@@ -1,6 +1,7 @@
 import { layout } from "../styles/layout";
 import { buttons, gridStyles } from "../styles/components";
 import { Grid } from "../components/Grid"
+import PlayerBar from "../components/PlayerBar";
 
 export default function GameScreen({
   board,
@@ -8,36 +9,56 @@ export default function GameScreen({
   winner,
   playerId,
   makeMove,
-  goBack
+  match_cancelled,
+  winPattern,
+  playerNames,
+  symbols,
+  mode,
+  remainingTime
 }) {
-  const getStatus = () => {
-    if (winner) {
-      return winner === playerId ? "🎉 You Won!" : "😢 You Lost";
-    }
-    if (!turn) return "Waiting for opponent...";
-    return turn === playerId ? "🟢 Your Turn" : "🟡 Opponent Turn";
-  };
+  const players = Object.keys(playerNames || {});
+
+  const opponentId = players.find(p => p !== playerId);
 
   let cellList = board.map((cell, i) => {
     let symbol = cell
-      ? (cell === playerId ? "X" : "O")
-      : "";
 
     return (
       {
         "onClick":() => makeMove(i),
-        "content":symbol
+        "content":symbol,
+        style: {
+          ...gridStyles.cell,
+          ...gridStyles.xoCell,
+          ...(winPattern?.includes(i) ? (winner === playerId ? gridStyles.winCell:gridStyles.lostCell) : {})
+        }
       }
     );
   });
 
   return (
-      <div>
-        <h3 style={layout.status}>{getStatus()}</h3>
+      <div style={gridStyles.gridContainer}>
+        <PlayerBar
+          name={playerNames[opponentId]}
+          symbol={symbols[opponentId]}
+          userId={opponentId}
+          turn={turn}
+          playerId={playerId}
+          winner={winner}
+          mode={mode}
+          remainingTime={(turn==opponentId)?remainingTime:30}
+        />
         <Grid cellList={cellList} defaultStyle={{ ...gridStyles.cell, ...gridStyles.xoCell }}/>
-        <button onClick={goBack} style={buttons.secondary}>
-          ⬅ Back
-        </button>
+        <PlayerBar
+          name={playerNames[playerId]}
+          symbol={symbols[playerId]}
+          userId={playerId}
+          turn={turn}
+          playerId={playerId}
+          winner={winner}
+          mode={mode}
+          remainingTime={(turn==playerId)?remainingTime:30}
+        />
       </div>
   );
 }
