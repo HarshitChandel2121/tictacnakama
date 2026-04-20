@@ -5,6 +5,7 @@ import MenuScreen from "./screens/MenuScreen";
 import GameScreen from "./screens/GameScreen";
 import CreateRoomScreen from "./screens/CreateRoomScreen";
 import JoinRoomScreen from "./screens/JoinRoomScreen";
+import LeaderboardScreen from "./screens/LeaderboardScreen";
 import Profile from "./components/profile";
 import BackButton from "./components/BackButton";
 
@@ -48,6 +49,8 @@ function App() {
   const [symbols,setSymbols] = useState({})
 
   const [remainingTime,setRemainingTime] = useState(null)
+
+  const [leaderboard, setLeaderboard] = useState([]);
 
   /* ---------------- INIT ---------------- */
   useEffect(() => {
@@ -268,6 +271,11 @@ function App() {
     sessionStorage.removeItem("matchId");
   };
 
+  
+  const openLeaderboard = async () => {
+    setScreen("leaderboard");
+  };
+
   /* ---------------- RENDER ---------------- */
 
   return (
@@ -301,6 +309,7 @@ function App() {
                 searchTime = {searchTime}
                 onCancel = {cancelMatchmaking}
                 searchingMode = {mode}
+                openLeaderboard={openLeaderboard}
               />
             )}
 
@@ -337,6 +346,14 @@ function App() {
                 symbols={symbols}
                 mode={mode}
                 remainingTime={remainingTime}
+              />
+            )}
+
+            {screen === "leaderboard" && (
+              <LeaderboardScreen
+                client={client}
+                session={session}
+                playerId={playerId}
               />
             )}
           </div>

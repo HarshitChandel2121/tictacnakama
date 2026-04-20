@@ -1,3 +1,5 @@
+import { text } from "./styles/layout";
+
 export const styles = {
   container: {
     minHeight: "100vh",
@@ -28,11 +30,14 @@ export const styles = {
   },
 
   input: {
-    width: "100%",
     padding: "10px",
     borderRadius: "8px",
     border: "none",
-    marginBottom: "10px"
+    marginBottom: "10px",
+    width: "365px",
+    display: "flex",
+    textAlign: "center",
+    boxSizing: "border-box" 
   },
 
   button: {
@@ -84,6 +89,7 @@ export const styles = {
   },
 
   buttonRow: {
+    width: "365px",
     display: "flex",
     gap: "10px",
     marginTop: "10px"

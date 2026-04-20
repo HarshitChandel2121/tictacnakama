@@ -163,6 +163,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
 
           if (otherPlayer) {
             state.winner = otherPlayer;
+            updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
             logger.info("🏆 Winner (timeout): " + otherPlayer);
           }
         }
@@ -187,6 +188,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
         state.remainingTime=0;
         dispatcher.broadcastMessage(2, JSON.stringify({remainingTime:state.remainingTime}));
         state.winner = winner;
+        updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
         logger.info("⏱ Time out. Winner: " + winner);
 
         dispatcher.broadcastMessage(1, JSON.stringify(state));
@@ -247,6 +249,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
           state.board[c] === state.currentPlayerSymbol
         ) {
           state.winner = msg.sender.userId;
+          updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
           state.winPattern = pattern
           logger.info("🏆 Winner: " + state.winner);
         }
@@ -254,6 +257,7 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
 
       if (!state.winner && state.board.every(cell => cell !== null)) {
         state.winner = "draw";
+        updateLeaderboard(nk,logger,state.players[0],state.players[1],state.winner)
         logger.info("Game draw");
       }
 
@@ -378,8 +382,154 @@ let listMatchesRPC = function (ctx, logger, nk, payload) {
   }
 };
 
+const getPlayerRecord = (nk, logger, userId) => {
+  try {
+    logger.info("getting records for userId : "+userId)
+    const records = nk.leaderboardRecordsList(
+      "global_leaderboard",
+      [userId],
+      1
+    );
+    
+    // logger.info(records)
+
+    if (records.ownerRecords.length > 0) {
+      return records.ownerRecords[0];
+    }
+  } catch(error) {
+    logger.error("error in getPlayerRecord : "+ JSON.stringify(error));
+  }
+
+  return {
+    score: 500,
+    metadata: {
+      wins: 0,
+      losses: 0,
+      draws:0,
+      streak: 0,
+      bestStreak: 0
+    }
+  };
+};
+
+const calculateElo = (logger, ratingA, ratingB, scoreA, K = 32) => {
+  try {
+    const expectedA = 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+
+    const diff = Math.abs(ratingA - ratingB);
+
+    // 🔥 amplify factor for large rating gaps
+    const factor = diff > 200 ? 1.5 : diff > 100 ? 1.2 : 1;
+    if (scoreA === 0.5) {
+      factor *= 0.5;
+    }
+
+    return Math.round(ratingA + K * factor * (scoreA - expectedA));
+  } catch(error) {
+    logger.error("error in calculateElo : "+ JSON.stringify(error))
+    return ratingA
+  }
+};
+
+const updateLeaderboard = (nk, logger, user1Id, user2Id, winner) => {
+  try {
+    logger.info("user1Id : "+user1Id+" user2Id : "+user2Id+" winner : "+winner)
+    const user1Record = getPlayerRecord(nk,logger, user1Id);
+    const user2Record = getPlayerRecord(nk,logger, user2Id);
+    logger.info("user1 record : "+JSON.stringify(user1Record))
+    logger.info("user2 record : "+JSON.stringify(user2Record))
+
+    const user1Rating = user1Record.score;
+    const user2Rating = user2Record.score;
+    logger.info("ratings before: " + user1Rating + " vs " + user2Rating);
+
+    const user1ScoreA = (winner=="draw")?0.5:((winner==user1Id)?1:0);
+    const user2ScoreA = (winner=="draw")?0.5:((winner==user2Id)?1:0);
+    const user1NewRating = calculateElo(logger,user1Rating, user2Rating, user1ScoreA);
+    const user2NewRating = calculateElo(logger,user2Rating, user1Rating, user2ScoreA);
+    logger.info("ratings after: " + user1NewRating + " vs " + user2NewRating);
+
+    // update metadata
+    const user1Meta = { ...(user1Record.metadata || {
+      wins: 0,
+      losses: 0,
+      streak: 0,
+      bestStreak: 0
+    }) };
+    const user2Meta = { ...(user2Record.metadata || {
+      wins: 0,
+      losses: 0,
+      streak: 0,
+      bestStreak: 0
+    }) };
+
+    if (winner=="draw") {
+      user1Meta.draws += 1;
+      user1Meta.streak = 0;
+
+      user2Meta.draws += 1;
+      user2Meta.streak = 0;
+    }
+    else {
+      if (winner==user1Id) {
+        user1Meta.wins += 1;
+        user1Meta.streak += 1;
+        user1Meta.bestStreak = Math.max(user1Meta.bestStreak, user1Meta.streak);
+
+        user2Meta.losses += 1;
+        user2Meta.streak = 0;
+      } else
+      {
+        user2Meta.wins += 1;
+        user2Meta.streak += 1;
+        user2Meta.bestStreak = Math.max(user2Meta.bestStreak, user2Meta.streak);
+
+        user1Meta.losses += 1;
+        user1Meta.streak = 0;
+      }
+    }
+
+    logger.info("saving updated record")
+    // write leaderboard
+    nk.leaderboardRecordWrite(
+      "global_leaderboard",
+      user1Id,
+      null,
+      user1NewRating,
+      0,
+      user1Meta
+    );
+
+    nk.leaderboardRecordWrite(
+      "global_leaderboard",
+      user2Id,
+      null,
+      user2NewRating,
+      0,
+      user2Meta
+    );
+    logger.info("saved updated record")
+  } catch(error) {
+    logger.error("error in updateLeaderboard : " + JSON.stringify(error));
+  }
+};
+
+
 var InitModule = function (ctx, logger, nk, initializer) {
   logger.info("🔥 InitModule called");
+
+  // Create leaderboard once
+  try {
+    nk.leaderboardCreate(
+      "global_leaderboard",
+      true, // authoritative
+      "desc",
+      "set"
+    );
+    logger.info("Leaderboard created");
+  } catch (err) {
+    logger.info("Leaderboard already exists or error: " + err);
+  }
 
   initializer.registerMatch("tic-tac-toe", {
     matchInit: matchInit,

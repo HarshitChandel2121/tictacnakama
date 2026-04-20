@@ -7,6 +7,7 @@ export default function MenuScreen({
   onQuickGame,
   onCreate,
   onJoin,
+  openLeaderboard,
   isSearching,
   searchTime,
   onCancel,
@@ -78,6 +79,13 @@ export default function MenuScreen({
       content: <>JOIN<br />ROOM</>
     }
   }
+  const getLeaderBoardCell = () => {
+    return {
+      onClick: openLeaderboard,
+      content: <>LEADER<br />BOARD</>
+    }
+  }
+  
   const getDecorationCell = (decorationCell,setDecorationCell) => {
     return {
       onClick: () => toggleDecorationCell(decorationCell,setDecorationCell),
@@ -101,7 +109,7 @@ export default function MenuScreen({
     getJoinRoomCell(),
     getDecorationCell(decorationCell3,setDecorationCell3),
     getCreateRoomCell(),
-    getJoinRoomCell()
+    getLeaderBoardCell()
   ];
   return (
     <div>
