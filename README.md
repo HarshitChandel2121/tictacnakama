@@ -7,6 +7,18 @@ Realtime multiplayer Tic Tac Toe built with:
 
 ---
 
+## Quick Start
+### Backend
+```bash
+docker compose up -d
+docker compose logs -f nakama
+
+### Frontend
+```bash
+cd tic-tac-toe-client
+npm install
+npm start
+
 ## Project Structure
 
 ```text
@@ -17,3 +29,4 @@ Realtime multiplayer Tic Tac Toe built with:
 └── tic-tac-toe-client/
     ├── package.json
     └── src/
+
